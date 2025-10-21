@@ -1,8 +1,0 @@
-settings:
-  prompt_on_join: true
-
-messages:
-  auto_login_success: "&aConnexion automatique détectée — compte premium authentifié !"
-  prompt_ip: "&eVoulez-vous activer le bypass de connexion pour cette IP ?"
-  premium_link_success: "&aVotre compte premium est désormais lié et connecté !"
-  premium_revoke: "&cLe bypass a été retiré pour ce compte."
