@@ -1,313 +1,367 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  org.bukkit.ChatColor
+ *  org.bukkit.command.Command
+ *  org.bukkit.command.CommandSender
+ *  org.bukkit.configuration.file.FileConfiguration
+ *  org.bukkit.configuration.file.YamlConfiguration
+ *  org.bukkit.entity.Player
+ *  org.bukkit.event.EventHandler
+ *  org.bukkit.event.Listener
+ *  org.bukkit.event.player.PlayerJoinEvent
+ *  org.bukkit.plugin.Plugin
+ *  org.bukkit.plugin.java.JavaPlugin
+ */
 package com.example.premiumauthbypass;
 
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
-import org.bukkit.command.ConsoleCommandSender;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.plugin.java.JavaPlugin;
-
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.bukkit.ChatColor;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.java.JavaPlugin;
 
-/**
- * PremiumAuthBypass with IP-based opt-in bypass.
- *
- * Flow:
- * - If player's name is linked and stored IP matches current IP -> forceLogin via AuthMe.
- * - Otherwise, player must login normally. After they are authenticated, they can run
- *   /premiumbypass accept to opt-in: their current IP is saved and future logins from that IP
- *   will be auto-logged.
- * - If IP changes, they must re-authenticate and run /premiumbypass accept again.
- *
- * Bedrock players (usernames starting with '_') are supported the same way.
- *
- * This plugin uses reflection to find a compatible AuthMe API at runtime, so it compiles without
- * a specific AuthMe jar, and works with several AuthMe versions.
- */
-public class PremiumAuthBypass extends JavaPlugin implements Listener {
-
-    private Object authMeApiInstance = null; // reflection-based API instance
+public class PremiumAuthBypass
+extends JavaPlugin
+implements Listener {
+    private Object authMeApiInstance = null;
     private Method mIsAuthenticated = null;
     private Method mForceLogin = null;
-
-    private final Map<String, Boolean> premiumCache = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> premiumCache = new ConcurrentHashMap<String, Boolean>();
     private File linkedFile;
     private FileConfiguration linkedConfig;
     private FileConfiguration cfg;
 
-    @Override
     public void onEnable() {
-        saveDefaultConfig();
-        cfg = getConfig();
-
-        // prepare linked.yml
-        linkedFile = new File(getDataFolder(), "linked.yml");
-        if (!linkedFile.exists()) {
-            linkedFile.getParentFile().mkdirs();
+        this.saveDefaultConfig();
+        this.cfg = this.getConfig();
+        this.linkedFile = new File(this.getDataFolder(), "linked.yml");
+        if (!this.linkedFile.exists()) {
+            this.linkedFile.getParentFile().mkdirs();
             try {
-                linkedFile.createNewFile();
-            } catch (IOException e) {
-                getLogger().warning("Could not create linked.yml: " + e.getMessage());
+                this.linkedFile.createNewFile();
+            }
+            catch (IOException e) {
+                this.getLogger().warning("Could not create linked.yml: " + e.getMessage());
             }
         }
-        linkedConfig = YamlConfiguration.loadConfiguration(linkedFile);
-
-        // attempt to find AuthMe API reflectively
+        this.linkedConfig = YamlConfiguration.loadConfiguration((File)this.linkedFile);
         try {
-            findAuthMeApi();
-        } catch (Exception e) {
-            getLogger().warning("AuthMe API not found via reflection. Plugin will still run but cannot force-login players until AuthMe is present.");
+            this.findAuthMeApi();
         }
-
-        getServer().getPluginManager().registerEvents(this, this);
-        getLogger().info("PremiumAuthBypass enabled. Use /premiumbypass accept|revoke|status");
+        catch (Exception e) {
+            this.getLogger().warning("AuthMe API not found via reflection. Plugin will still run but cannot force-login players until AuthMe is present.");
+        }
+        this.getServer().getPluginManager().registerEvents((Listener)this, (Plugin)this);
+        this.getLogger().info("PremiumAuthBypass enabled. Use /premiumbypass accept|revoke|status");
     }
 
-    @Override
     public void onDisable() {
-        if (linkedConfig != null && linkedFile != null) {
+        if (this.linkedConfig != null && this.linkedFile != null) {
             try {
-                linkedConfig.save(linkedFile);
-            } catch (IOException e) {
-                getLogger().warning("Could not save linked.yml: " + e.getMessage());
+                this.linkedConfig.save(this.linkedFile);
+            }
+            catch (IOException e) {
+                this.getLogger().warning("Could not save linked.yml: " + e.getMessage());
             }
         }
-        getLogger().info("PremiumAuthBypass disabled.");
+        this.getLogger().info("PremiumAuthBypass disabled.");
     }
 
-    /**
-     * Try several known AuthMe API entry-points via reflection to obtain:
-     * - an object instance (or null if static methods used)
-     * - a method to check authentication: isAuthenticated(Player)
-     * - a method to force login: forceLogin(Player)
-     *
-     * This increases compatibility with various AuthMe versions.
-     */
     private void findAuthMeApi() {
-        // Try v3 style: fr.xephi.authme.api.v3.AuthMeApi.getInstance()
         try {
             Class<?> c = Class.forName("fr.xephi.authme.api.v3.AuthMeApi");
-            Method getInstance = c.getMethod("getInstance");
-            Object instance = getInstance.invoke(null);
-            Method isAuth = c.getMethod("isAuthenticated", org.bukkit.entity.Player.class);
-            Method force = c.getMethod("forceLogin", org.bukkit.entity.Player.class);
-            authMeApiInstance = instance;
-            mIsAuthenticated = isAuth;
-            mForceLogin = force;
-            getLogger().info("Found AuthMe API: fr.xephi.authme.api.v3.AuthMeApi");
+            Method getInstance = c.getMethod("getInstance", new Class[0]);
+            Object instance = getInstance.invoke(null, new Object[0]);
+            Method isAuth = c.getMethod("isAuthenticated", Player.class);
+            Method force = c.getMethod("forceLogin", Player.class);
+            this.authMeApiInstance = instance;
+            this.mIsAuthenticated = isAuth;
+            this.mForceLogin = force;
+            this.getLogger().info("Found AuthMe API: fr.xephi.authme.api.v3.AuthMeApi");
             return;
-        } catch (Throwable ignored) {}
-
-        // Try older API: fr.xephi.authme.api.API.getInstance()
-        try {
-            Class<?> c = Class.forName("fr.xephi.authme.api.API");
-            Method getInstance = c.getMethod("getInstance");
-            Object instance = getInstance.invoke(null);
-            Method isAuth = c.getMethod("isAuthenticated", org.bukkit.entity.Player.class);
-            Method force = c.getMethod("forceLogin", org.bukkit.entity.Player.class);
-            authMeApiInstance = instance;
-            mIsAuthenticated = isAuth;
-            mForceLogin = force;
-            getLogger().info("Found AuthMe API: fr.xephi.authme.api.API");
-            return;
-        } catch (Throwable ignored) {}
-
-        // Try fr.xephi.authme.AuthMe.getInstance().getAPI()
-        try {
-            Class<?> main = Class.forName("fr.xephi.authme.AuthMe");
-            Method getInstance = main.getMethod("getInstance");
-            Object mainInstance = getInstance.invoke(null);
-            Method getAPI = main.getMethod("getAPI");
-            Object apiInstance = getAPI.invoke(mainInstance);
-            Class<?> apiClass = apiInstance.getClass();
-            Method isAuth = apiClass.getMethod("isAuthenticated", org.bukkit.entity.Player.class);
-            Method force = apiClass.getMethod("forceLogin", org.bukkit.entity.Player.class);
-            authMeApiInstance = apiInstance;
-            mIsAuthenticated = isAuth;
-            mForceLogin = force;
-            getLogger().info("Found AuthMe API via fr.xephi.authme.AuthMe.getInstance().getAPI()");
-            return;
-        } catch (Throwable ignored) {}
-
-        // If we reach here, API not found. That's okay; commands can still work after AuthMe is present.
+        }
+        catch (Throwable c) {
+            try {
+                Class<?> c2 = Class.forName("fr.xephi.authme.api.API");
+                Method getInstance = c2.getMethod("getInstance", new Class[0]);
+                Object instance = getInstance.invoke(null, new Object[0]);
+                Method isAuth = c2.getMethod("isAuthenticated", Player.class);
+                Method force = c2.getMethod("forceLogin", Player.class);
+                this.authMeApiInstance = instance;
+                this.mIsAuthenticated = isAuth;
+                this.mForceLogin = force;
+                this.getLogger().info("Found AuthMe API: fr.xephi.authme.api.API");
+                return;
+            }
+            catch (Throwable c2) {
+                try {
+                    Class<?> main = Class.forName("fr.xephi.authme.AuthMe");
+                    Method getInstance = main.getMethod("getInstance", new Class[0]);
+                    Object mainInstance = getInstance.invoke(null, new Object[0]);
+                    Method getAPI = main.getMethod("getAPI", new Class[0]);
+                    Object apiInstance = getAPI.invoke(mainInstance, new Object[0]);
+                    Class<?> apiClass = apiInstance.getClass();
+                    Method isAuth = apiClass.getMethod("isAuthenticated", Player.class);
+                    Method force = apiClass.getMethod("forceLogin", Player.class);
+                    this.authMeApiInstance = apiInstance;
+                    this.mIsAuthenticated = isAuth;
+                    this.mForceLogin = force;
+                    this.getLogger().info("Found AuthMe API via fr.xephi.authme.AuthMe.getInstance().getAPI()");
+                    return;
+                }
+                catch (Throwable throwable) {
+                    return;
+                }
+            }
+        }
     }
 
     private boolean isAuthenticated(Player p) {
-        if (mIsAuthenticated == null) return false;
+        if (this.mIsAuthenticated == null) {
+            return false;
+        }
         try {
-            Object res = mIsAuthenticated.invoke(authMeApiInstance, p);
-            if (res instanceof Boolean) return (Boolean) res;
-        } catch (IllegalAccessException | InvocationTargetException e) {
-            getLogger().warning("Error invoking isAuthenticated via reflection: " + e.getMessage());
+            Object res = this.mIsAuthenticated.invoke(this.authMeApiInstance, p);
+            if (res instanceof Boolean) {
+                return (Boolean)res;
+            }
+        }
+        catch (IllegalAccessException | InvocationTargetException e) {
+            this.getLogger().warning("Error invoking isAuthenticated via reflection: " + e.getMessage());
         }
         return false;
     }
 
     private void forceLogin(Player p) {
-        if (mForceLogin == null) {
-            getLogger().warning("Cannot forceLogin - AuthMe API not found.");
+        if (this.mForceLogin == null) {
+            this.getLogger().warning("Cannot forceLogin - AuthMe API not found.");
             return;
         }
         try {
-            mForceLogin.invoke(authMeApiInstance, p);
-        } catch (IllegalAccessException | InvocationTargetException e) {
-            getLogger().warning("Error invoking forceLogin via reflection: " + e.getMessage());
+            this.mForceLogin.invoke(this.authMeApiInstance, p);
+        }
+        catch (IllegalAccessException | InvocationTargetException e) {
+            this.getLogger().warning("Error invoking forceLogin via reflection: " + e.getMessage());
         }
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
+        boolean alreadyPrompted;
         Player player = event.getPlayer();
         String name = player.getName();
         String lower = name.toLowerCase();
-
-        // Bedrock usernames: optional special handling can be added (user said they start with '_').
-        boolean isBedrockLike = name.startsWith("_");
-
-        // If stored IP exists and matches player's current IP -> auto-login
-        String storedIp = linkedConfig.getString(lower + ".ip", null);
         String currentIp = player.getAddress() != null ? player.getAddress().getAddress().getHostAddress() : null;
-
-        if (storedIp != null && currentIp != null && storedIp.equals(currentIp)) {
-            // auto login
-            if (!isAuthenticated(player)) {
-                forceLogin(player);
-                player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                        cfg.getString("messages.auto_login_success", "&aConnexion automatique détectée (compte premium) — authentifié.")));
-                getLogger().info("Auto-logged (IP matched) player: " + name + " (" + currentIp + ")");
+        List storedIps = this.linkedConfig.getStringList(lower + ".ips");
+        if (currentIp != null && storedIps != null && storedIps.contains(currentIp)) {
+            if (!this.isAuthenticated(player)) {
+                this.forceLogin(player);
+                player.sendMessage(ChatColor.translateAlternateColorCodes((char)'&', (String)this.cfg.getString("messages.auto_login_success", "&aConnexion automatique d\u00e9tect\u00e9e (compte premium) \u2014 authentifi\u00e9.")));
+                this.getLogger().info("Auto-logged (IP matched) player: " + name + " (" + currentIp + ")");
             }
             return;
         }
-
-        // If player is authenticated (they logged in with password), prompt once to offer bypass
-        if (isAuthenticated(player)) {
-            boolean alreadyPrompted = linkedConfig.getBoolean(lower + ".prompted", false);
-            if (!alreadyPrompted) {
-                player.sendMessage(ChatColor.YELLOW + "Voulez-vous activer le bypass de connexion pour cette IP ?");
-                player.sendMessage(ChatColor.YELLOW + "Tapez " + ChatColor.AQUA + "/premiumbypass accept" + ChatColor.YELLOW + " pour autoriser cette IP.");
-                player.sendMessage(ChatColor.YELLOW + "Tapez " + ChatColor.AQUA + "/premiumbypass revoke" + ChatColor.YELLOW + " pour retirer l'autorisation plus tard.");
-                linkedConfig.set(lower + ".prompted", true);
-                try {
-                    linkedConfig.save(linkedFile);
-                } catch (IOException e) {
-                    getLogger().warning("Could not save linked.yml: " + e.getMessage());
-                }
+        if (this.isAuthenticated(player) && !(alreadyPrompted = this.linkedConfig.getBoolean(lower + ".prompted", false))) {
+            player.sendMessage(String.valueOf(ChatColor.YELLOW) + "Voulez-vous activer le bypass de connexion pour cette IP ?");
+            player.sendMessage(String.valueOf(ChatColor.YELLOW) + "Tapez " + String.valueOf(ChatColor.AQUA) + "/premiumbypass accept" + String.valueOf(ChatColor.YELLOW) + " pour autoriser cette IP.");
+            player.sendMessage(String.valueOf(ChatColor.YELLOW) + "Tapez " + String.valueOf(ChatColor.AQUA) + "/premiumbypass revoke" + String.valueOf(ChatColor.YELLOW) + " pour retirer l'autorisation plus tard.");
+            this.linkedConfig.set(lower + ".prompted", (Object)true);
+            try {
+                this.linkedConfig.save(this.linkedFile);
             }
-        } else {
-            // Not authenticated and IP different -> no auto-login. Nothing else to do.
+            catch (IOException e) {
+                this.getLogger().warning("Could not save linked.yml: " + e.getMessage());
+            }
         }
     }
 
-    // Command handling: /premiumbypass accept | revoke | status
-    @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        String sub;
+        String currentIp;
         if (!(sender instanceof Player)) {
-            sender.sendMessage("This command is only for players.");
+            sender.sendMessage("Cette commande est uniquement pour les joueurs.");
             return true;
         }
-        Player p = (Player) sender;
+        Player p = (Player)sender;
         String lower = p.getName().toLowerCase();
-        String currentIp = p.getAddress() != null ? p.getAddress().getAddress().getHostAddress() : null;
-
+        String string = currentIp = p.getAddress() != null ? p.getAddress().getAddress().getHostAddress() : null;
         if (args.length == 0) {
-            p.sendMessage(ChatColor.YELLOW + "Usage: /premiumbypass accept|revoke|status");
+            p.sendMessage(String.valueOf(ChatColor.YELLOW) + "Usage: /premium accept|revoke [all|<ip>]|status");
             return true;
         }
-
-        String sub = args[0].toLowerCase();
-        if (sub.equals("accept")) {
-            // Only allow accept if player is authenticated right now
-            if (!isAuthenticated(p)) {
-                p.sendMessage(ChatColor.RED + "Vous devez vous être authentifié (tapez /login <mdp>) avant d'activer le bypass.");
-                return true;
+        switch (sub = args[0].toLowerCase(Locale.ROOT)) {
+            case "accept": {
+                return this.handleAccept(p, lower, currentIp);
             }
-            if (currentIp == null) {
-                p.sendMessage(ChatColor.RED + "Impossible de récupérer votre IP.");
-                return true;
+            case "revoke": {
+                return this.handleRevoke(p, lower, currentIp, args);
             }
-            linkedConfig.set(lower + ".ip", currentIp);
-            linkedConfig.set(lower + ".prompted", true);
-            try {
-                linkedConfig.save(linkedFile);
-                p.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                        cfg.getString("messages.premium_link_success", "&aCompte premium lié et connecté !")));
-                getLogger().info("Linked " + p.getName() + " to IP " + currentIp);
-            } catch (IOException e) {
-                p.sendMessage(ChatColor.RED + "Erreur lors de la sauvegarde: " + e.getMessage());
+            case "status": {
+                return this.handleStatus(p, lower);
             }
-            return true;
-        } else if (sub.equals("revoke")) {
-            linkedConfig.set(lower + ".ip", null);
-            linkedConfig.set(lower + ".prompted", false);
-            try {
-                linkedConfig.save(linkedFile);
-                p.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                        cfg.getString("messages.premium_revoke", "&cBypass retiré pour ce compte.")));
-                getLogger().info("Revoked bypass for " + p.getName());
-            } catch (IOException e) {
-                p.sendMessage(ChatColor.RED + "Erreur lors de la sauvegarde: " + e.getMessage());
-            }
-            return true;
-        } else if (sub.equals("status")) {
-            String ip = linkedConfig.getString(lower + ".ip", null);
-            if (ip == null) {
-                p.sendMessage(ChatColor.YELLOW + "Aucune IP liée pour votre compte.");
-            } else {
-                p.sendMessage(ChatColor.GREEN + "IP liée: " + ip);
-            }
-            return true;
-        } else {
-            p.sendMessage(ChatColor.YELLOW + "Usage: /premiumbypass accept|revoke|status");
-            return true;
         }
+        p.sendMessage(String.valueOf(ChatColor.YELLOW) + "Usage: /premium accept|revoke [all|<ip>]|status");
+        return true;
     }
 
-    /**
-     * OPTIONAL: simple Mojang username check method (kept for compatibility or info).
-     * Not used by the IP-bypass flow, but present if you want to enable detection.
+    private boolean handleAccept(Player p, String lower, String currentIp) {
+        if (!this.isAuthenticated(p)) {
+            p.sendMessage(String.valueOf(ChatColor.RED) + "Vous devez vous \u00eatre authentifi\u00e9 (tapez /login <mdp>) avant d'activer le bypass.");
+            return true;
+        }
+        if (currentIp == null) {
+            p.sendMessage(String.valueOf(ChatColor.RED) + "Impossible de r\u00e9cup\u00e9rer votre IP.");
+            return true;
+        }
+        ArrayList<String> ips = new ArrayList<String>(this.linkedConfig.getStringList(lower + ".ips"));
+        if (!ips.contains(currentIp)) {
+            ips.add(currentIp);
+            this.linkedConfig.set(lower + ".ips", ips);
+            this.linkedConfig.set(lower + ".prompted", (Object)true);
+            try {
+                this.linkedConfig.save(this.linkedFile);
+                p.sendMessage(ChatColor.translateAlternateColorCodes((char)'&', (String)this.cfg.getString("messages.premium_link_success", "&aIP ajout\u00e9e et activ\u00e9e pour le bypass !")));
+                this.getLogger().info("Linked " + p.getName() + " to IP " + currentIp);
+            }
+            catch (IOException e) {
+                p.sendMessage(String.valueOf(ChatColor.RED) + "Erreur lors de la sauvegarde: " + e.getMessage());
+            }
+        } else {
+            p.sendMessage(String.valueOf(ChatColor.GREEN) + "Cette IP est d\u00e9j\u00e0 autoris\u00e9e pour le bypass.");
+        }
+        return true;
+    }
+
+    private boolean handleRevoke(Player p, String lower, String currentIp, String[] args) {
+        ArrayList ips = new ArrayList(this.linkedConfig.getStringList(lower + ".ips"));
+        if (args.length == 1) {
+            if (currentIp == null) {
+                p.sendMessage(String.valueOf(ChatColor.RED) + "Impossible de r\u00e9cup\u00e9rer votre IP.");
+                return true;
+            }
+            if (ips.remove(currentIp)) {
+                this.linkedConfig.set(lower + ".ips", ips);
+                if (ips.isEmpty()) {
+                    this.linkedConfig.set(lower + ".prompted", (Object)false);
+                }
+                try {
+                    this.linkedConfig.save(this.linkedFile);
+                    p.sendMessage(ChatColor.translateAlternateColorCodes((char)'&', (String)this.cfg.getString("messages.premium_revoke", "&cBypass retir\u00e9 pour cette IP.")));
+                    this.getLogger().info("Revoked bypass for " + p.getName() + " IP: " + currentIp);
+                }
+                catch (IOException e) {
+                    p.sendMessage(String.valueOf(ChatColor.RED) + "Erreur lors de la sauvegarde: " + e.getMessage());
+                }
+            } else {
+                p.sendMessage(String.valueOf(ChatColor.YELLOW) + "Votre IP courante n'est pas dans la liste des IP autoris\u00e9es.");
+            }
+            return true;
+        }
+        String opt = args[1].toLowerCase(Locale.ROOT);
+        if (opt.equals("all")) {
+            this.linkedConfig.set(lower + ".ips", new ArrayList());
+            this.linkedConfig.set(lower + ".prompted", (Object)false);
+            try {
+                this.linkedConfig.save(this.linkedFile);
+                p.sendMessage(ChatColor.translateAlternateColorCodes((char)'&', (String)this.cfg.getString("messages.premium_revoke_all", "&cToutes les IPs autoris\u00e9es ont \u00e9t\u00e9 retir\u00e9es.")));
+                this.getLogger().info("Revoked ALL bypass IPs for " + p.getName());
+            }
+            catch (IOException e) {
+                p.sendMessage(String.valueOf(ChatColor.RED) + "Erreur lors de la sauvegarde: " + e.getMessage());
+            }
+            return true;
+        }
+        String ipToRemove = args[1];
+        if (ips.remove(ipToRemove)) {
+            this.linkedConfig.set(lower + ".ips", ips);
+            if (ips.isEmpty()) {
+                this.linkedConfig.set(lower + ".prompted", (Object)false);
+            }
+            try {
+                this.linkedConfig.save(this.linkedFile);
+                p.sendMessage(ChatColor.translateAlternateColorCodes((char)'&', (String)this.cfg.getString("messages.premium_revoke_specific", "&cIP supprim\u00e9e de la liste d'autorisations.")));
+                this.getLogger().info("Revoked IP " + ipToRemove + " for " + p.getName());
+            }
+            catch (IOException e) {
+                p.sendMessage(String.valueOf(ChatColor.RED) + "Erreur lors de la sauvegarde: " + e.getMessage());
+            }
+        } else {
+            p.sendMessage(String.valueOf(ChatColor.YELLOW) + "L'IP sp\u00e9cifi\u00e9e n'est pas dans la liste.");
+        }
+        return true;
+    }
+
+    private boolean handleStatus(Player p, String lower) {
+        List ips = this.linkedConfig.getStringList(lower + ".ips");
+        if (ips == null || ips.isEmpty()) {
+            p.sendMessage(String.valueOf(ChatColor.YELLOW) + "Aucune IP li\u00e9e pour votre compte.");
+        } else {
+            p.sendMessage(String.valueOf(ChatColor.GREEN) + "IPs li\u00e9es :");
+            for (String ip : ips) {
+                p.sendMessage(String.valueOf(ChatColor.AQUA) + " - " + ip);
+            }
+        }
+        return true;
+    }
+
+    /*
+     * WARNING - Removed try catching itself - possible behaviour change.
      */
-    @SuppressWarnings("unused")
     private boolean checkUsernameIsPremium(String username) {
         HttpURLConnection con = null;
         try {
             String url = "https://api.mojang.com/users/profiles/minecraft/" + username;
-            con = (HttpURLConnection) new URL(url).openConnection();
+            con = (HttpURLConnection)new URL(url).openConnection();
             con.setConnectTimeout(3000);
             con.setReadTimeout(3000);
             con.setRequestMethod("GET");
             con.setRequestProperty("User-Agent", "PremiumAuthBypass/1.2");
-
             int code = con.getResponseCode();
             if (code == 200) {
-                try (BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream(), StandardCharsets.UTF_8))) {
-                    StringBuilder sb = new StringBuilder();
+                try (BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream(), StandardCharsets.UTF_8));){
                     String line;
-                    while ((line = in.readLine()) != null) sb.append(line);
-                    return sb.length() > 0;
+                    StringBuilder sb = new StringBuilder();
+                    while ((line = in.readLine()) != null) {
+                        sb.append(line);
+                    }
+                    boolean bl = sb.length() > 0;
+                    return bl;
                 }
             }
-            return false;
-        } catch (Exception e) {
-            getLogger().warning("Error checking Mojang API for " + username + ": " + e.getMessage());
-            return false;
-        } finally {
-            if (con != null) con.disconnect();
+            boolean bl = false;
+            return bl;
+        }
+        catch (Exception e) {
+            this.getLogger().warning("Error checking Mojang API for " + username + ": " + e.getMessage());
+            boolean bl = false;
+            return bl;
+        }
+        finally {
+            if (con != null) {
+                con.disconnect();
+            }
         }
     }
 }
