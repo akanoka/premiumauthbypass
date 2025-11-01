@@ -1,126 +1,124 @@
 # PremiumAuthBypass
 
-**Bypass premium basé sur l'IP (opt‑in) pour AuthMe Reloaded**
+**IP-based premium bypass (opt-in) for AuthMe Reloaded**
 
-Un plugin additionnel pour AuthMe Reloaded qui permet aux joueurs **d'accepter** d'enregistrer leur IP après une connexion réussie. Si le joueur se reconnecte depuis la même IP, le plugin appelle automatiquement `AuthMe#forceLogin` pour le connecter sans resaisie du mot de passe.
+An add-on plugin for AuthMe Reloaded that allows players to **opt-in** to saving their IP address after a successful login. If the player reconnects from the same IP address, the plugin automatically calls `AuthMe#forceLogin` to log them in without requiring a password.
 
-> ⚠️ Ce système est **optionnel** (opt‑in) — le joueur doit explicitement exécuter `/premiumbypass accept` après sa première connexion pour enregistrer son IP.
+> ⚠️ This system is **optional** (opt-in) — the player must explicitly run `/premiumbypass accept` after their first login to save their IP address.
 
 ---
 
-## Table des matières
+## Table of Contents
 
-* [Présentation](#présentation)
-* [Fonctionnalités](#fonctionnalit%C3%A9s)
-* [Flux de fonctionnement](#flux-de-fonctionnement)
+* [Overview](#overview)
+* [Features](#features)
+* [Workflow](#workflow)
 * [Installation](#installation)
-* [Configuration (exemple)](#configuration-exemple)
-* [Commandes](#commandes)
-* [Développement & Compilation](#d%C3%A9veloppement--compilation)
-* [Sécurité & vie privée](#s%C3%A9curit%C3%A9--vie-priv%C3%A9)
-* [Contribuer](#contribuer)
-* [Licence](#licence)
+* [Configuration (example)](#configuration-example)
+* [Commands](#commands)
+* [Development & Compilation](#development--compilation)
+* [Security & Privacy](#security--privacy)
+* [Contributing](#contributing)
+* [License](#license)
 
 ---
 
-## Présentation
+## Overview
 
-PremiumAuthBypass permet d'améliorer l'expérience utilisateur sur les serveurs où AuthMe est utilisé en proposant un mécanisme simple de "connexion automatique" basé sur l'adresse IP enregistrée du joueur. Il est pensé pour les serveurs privés ou semi‑privés où l'adresse IP est un index de confiance raisonnable.
-
----
-
-## Fonctionnalités
-
-* Enregistrement opt‑in de l'IP du joueur après une authentification réussie.
-* Bypass automatique (appel à `forceLogin`) si l'IP du joueur correspond à l'IP enregistrée.
-* Gestion simple des identifiants IP côté plugin.
-* Support basique des noms "Bedrock‑like" (noms commençant par `_`) — traités comme les autres noms.
+PremiumAuthBypass improves the user experience on servers using AuthMe by providing a simple "automatic login" mechanism based on the player's registered IP address. It is designed for private or semi-private servers where the IP address is a reasonable indicator of trust.
 
 ---
 
-## Flux de fonctionnement
+## Features
 
-1. Le joueur se connecte normalement et s'authentifie via AuthMe (`/login`).
-2. Après la première connexion réussie, le plugin propose au joueur d'exécuter `/premiumbypass accept` pour enregistrer son IP actuelle.
-3. Lorsque le joueur revient, si son IP actuelle correspond à l'IP stockée, le plugin appelle `AuthMe.forceLogin(player)` et le connecte automatiquement.
-4. Si l'IP change, le joueur doit se réauthentifier et exécuter à nouveau `/premiumbypass accept`.
+* Opt-in saving of the player's IP address after successful authentication.
+* Automatic bypass (call to `forceLogin`) if the player's IP address matches the saved IP address.
+* Simple management of IP identifiers on the plugin side.
+* Basic support for "Bedrock-like" names (names starting with `_`) — treated like other names.
+
+---
+
+## Workflow
+
+1. The player connects normally and authenticates via AuthMe (`/login`). 2. After the first successful connection, the plugin prompts the player to run `/premiumbypass accept` to register their current IP address.
+3. When the player returns, if their current IP matches the stored IP, the plugin calls `AuthMe.forceLogin(player)` and automatically logs them in.
+4. If the IP changes, the player must re-authenticate and run `/premiumbypass accept` again.
 
 ---
 
 ## Installation
 
-1. Téléchargez la version compilée du plugin (fichier JAR) depuis les Releases GitHub.
-2. Placez `PremiumAuthBypass.jar` dans le dossier `plugins/` de votre serveur Minecraft.
-3. Redémarrez le serveur.
+1. Download the compiled version of the plugin (JAR file) from the GitHub Releases.
+2. Place `PremiumAuthBypass.jar` in the `plugins/` folder of your Minecraft server.
+3. Restart the server.
 
-**Note** : AuthMe Reloaded doit être installé et fonctionnel sur votre serveur pour que ce plugin fonctionne.
+**Note**: AuthMe Reloaded must be installed and working on your server for this plugin to function.
 
 ---
 
-## Configuration (exemple)
+## Configuration (example)
 
-Le plugin peut stocker les IPs dans un fichier interne (format JSON/YAML selon l'implémentation). Exemple d'entrée possible :
+The plugin can store IPs in an internal file (JSON/YAML format depending on the implementation). Example of a possible entry:
 
 ```yaml
-# premiumbypass.yml (exemple)
+# premiumbypass.yml (example)
 akaknoyw:
-  prompted: true
-  ip: 127.0.0.1
-  ips:
-  - 127.0.0.1
-  - 192.168.1.254
+prompted: true
+ip: 127.0.0.1
+ips:
+- 127.0.0.1
+- 192.168.1.254
 ```
 
-> Ajustez la configuration selon vos besoins et votre politique de sécurité.
+> Adjust the configuration according to your needs and security policy.
 
 ---
 
-## Commandes
+## Commands
 
-* `/premiumbypass accept` — Enregistre l'IP actuelle du joueur pour le bypass à l'avenir.
-* `/premiumbypass remove` — Supprime l'enregistrement IP du joueur.
-* `/premiumbypass status` — Affiche l'état actuel (IP enregistrée, date, etc.).
+* `/premiumbypass accept` — Registers the player's current IP address for future bypass.
+* `/premiumbypass remove` — Removes the player's IP registration.
+* `/premiumbypass status` — Displays the current status (registered IP, date, etc.).
 
-> Ces commandes peuvent nécessiter des permissions définies dans le plugin (p.ex. `premiumbypass.accept`, `premiumbypass.remove`, `premiumbypass.status`).
+> These commands may require permissions defined in the plugin (e.g., `premiumbypass.accept`, `premiumbypass.remove`, `premiumbypass.status`).
 
 ---
 
-## Développement & Compilation
+## Development & Compilation
 
-Le projet utilise Gradle. Si vous souhaitez compiler localement :
+The project uses Gradle. If you want to compile locally:
 
-1. Placez le JAR d'AuthMe dans `libs/` du projet (si nécessaire).
-2. Dans `build.gradle`, décommentez la ligne `compileOnly files('libs/authme.jar')` si elle existe.
-3. Compilez :
+1. Place the AuthMe JAR in the `libs/` folder of the project (if necessary). 2. In `build.gradle`, uncomment the line `compileOnly files('libs/authme.jar')` if it exists.
+3. Compile:
 
 ```bash
 ./gradlew clean build
 ```
 
-Le JAR compilé se trouvera généralement dans `build/libs/`.
+The compiled JAR will usually be located in `build/libs/`.
 
 ---
 
-## Sécurité & vie privée
+## Security & Privacy
 
-* **Risque IP** : L'utilisation d'une IP pour authentifier un joueur est moins sécurisée qu'un mot de passe. Les IP peuvent être partagées (NAT), changent avec les connexions, ou être compromises.
-* **Opt‑in** : Le plugin oblige le joueur à consentir (`/premiumbypass accept`) — ne l'activez pas par défaut sans le consentement du joueur.
-* **Données personnelles** : Les adresses IP sont des données personnelles dans plusieurs juridictions (p.ex. UE). Assurez‑vous de respecter la législation applicable (RGPD) : informer les joueurs, conserver les données pour une durée limitée, permettre la suppression à la demande, etc.
+* **IP Risk**: Using an IP address to authenticate a player is less secure than a password. IP addresses can be shared (NAT), change with connections, or be compromised.
+* **Opt-in**: The plugin requires the player to consent (`/premiumbypass accept`) — do not enable it by default without the player's consent.
+* **Personal Data**: IP addresses are considered personal data in several jurisdictions (e.g., EU). Make sure you comply with applicable legislation (GDPR): inform players, retain data for a limited time, allow deletion upon request, etc.
 
-Recommandations : ajouter une option d'expiration automatique des IP et un mécanisme d'export/suppression des données pour les demandes des utilisateurs.
-
----
-
-## Contribuer
-
-Les contributions sont bienvenues : bugs, améliorations, suggestions de sécurité. Merci de forker le dépôt, créer une branche dédiée, et ouvrir une Pull Request.
+Recommendations: Add an option for automatic IP expiration and a data export/deletion mechanism for user requests.
 
 ---
 
-## Licence
+## Contributing
 
-Ce projet est sous licence **Apache‑2.0**. Voir le fichier `LICENSE` pour le texte complet.
+Contributions are welcome: bug reports, improvements, security suggestions. Please fork the repository, create a dedicated branch, and open a Pull Request.
 
 ---
 
-*Dernière mise à jour : 31 Octobre 2025*
+## License
+
+This project is licensed under the **Apache-2.0** license. See the `LICENSE` file for the full text.
+
+---
+
+*Last updated: October 31, 2025*
