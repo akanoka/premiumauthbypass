@@ -1,13 +1,8 @@
 name: PremiumAuthBypass
+version: 3.1
 main: com.example.premiumauthbypass.PremiumAuthBypass
-version: 1.0
-api-version: 1.20
+api-version: 1.21
+depend:
+  - AuthMe
 commands:
-  premiumbypass:
-    description: Gérer le bypass premium via IP
-    usage: /premiumbypass accept|revoke|status
-    permission: premiumbypass.use
-permissions:
-  premiumbypass.use:
-    description: Permet d'utiliser les commandes premiumbypass
-    default: true
+  premium:
