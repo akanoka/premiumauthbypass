@@ -1,124 +1,123 @@
-# PremiumAuthBypass
+# 🔐 PremiumAuthBypass
 
-**IP-based premium bypass (opt-in) for AuthMe Reloaded**
+**PremiumAuthBypass** is a Bukkit/Spigot plugin designed to streamline authentication for premium Minecraft players by allowing automatic login based on trusted IP addresses.
 
-An add-on plugin for AuthMe Reloaded that allows players to **opt-in** to saving their IP address after a successful login. If the player reconnects from the same IP address, the plugin automatically calls `AuthMe#forceLogin` to log them in without requiring a password.
-
-> ⚠️ This system is **optional** (opt-in) — the player must explicitly run `/premiumbypass accept` after their first login to save their IP address.
+It integrates with **AuthMe Reloaded** and securely links player accounts to their IPs using AES encryption.
 
 ---
 
-## Table of Contents
+## ✨ Features
 
-* [Overview](#overview)
-* [Features](#features)
-* [Workflow](#workflow)
-* [Installation](#installation)
-* [Configuration (example)](#configuration-example)
-* [Commands](#commands)
-* [Development & Compilation](#development--compilation)
-* [Security & Privacy](#security--privacy)
-* [Contributing](#contributing)
-* [License](#license)
+- 🔓 **Automatic Login**
+  - Instantly logs in players if they connect from a trusted IP.
 
----
+- 🔗 **Premium Account Verification**
+  - Checks usernames against Mojang API to ensure they are premium accounts.
 
-## Overview
+- 🌐 **IP Linking System**
+  - Players can link their IP to their account for future automatic authentication.
 
-PremiumAuthBypass improves the user experience on servers using AuthMe by providing a simple "automatic login" mechanism based on the player's registered IP address. It is designed for private or semi-private servers where the IP address is a reasonable indicator of trust.
+- 🔐 **AES Encryption**
+  - All stored IP addresses are encrypted (AES-128) for security.
 
----
+- ⚡ **Async Operations**
+  - Network requests and file saves are handled asynchronously to avoid server lag.
 
-## Features
+- 🧠 **Smart AuthMe Integration**
+  - Uses reflection to support multiple versions of AuthMe.
 
-* Opt-in saving of the player's IP address after successful authentication.
-* Automatic bypass (call to `forceLogin`) if the player's IP address matches the saved IP address.
-* Simple management of IP identifiers on the plugin side.
-* Basic support for "Bedrock-like" names (names starting with `_`) — treated like other names.
+- 💬 **Fully Configurable Messages**
+  - Customize all plugin messages via config.
 
 ---
 
-## Workflow
+## 📦 Requirements
 
-1. The player connects normally and authenticates via AuthMe (`/login`). 2. After the first successful connection, the plugin prompts the player to run `/premiumbypass accept` to register their current IP address.
-3. When the player returns, if their current IP matches the stored IP, the plugin calls `AuthMe.forceLogin(player)` and automatically logs them in.
-4. If the IP changes, the player must re-authenticate and run `/premiumbypass accept` again.
-
----
-
-## Installation
-
-1. Download the compiled version of the plugin (JAR file) from the GitHub Releases.
-2. Place `PremiumAuthBypass.jar` in the `plugins/` folder of your Minecraft server.
-3. Restart the server.
-
-**Note**: AuthMe Reloaded must be installed and working on your server for this plugin to function.
+- Java 8+
+- Bukkit / Spigot / Paper server
+- **AuthMe Reloaded** (recommended for full functionality)
 
 ---
 
-## Configuration (example)
+## ⚙️ How It Works
 
-The plugin can store IPs in an internal file (JSON/YAML format depending on the implementation). Example of a possible entry:
+1. When a player joins:
+   - The plugin checks if their IP is already linked.
+   - If yes → automatic login via AuthMe.
 
-```yaml
-# premiumbypass.yml (example)
-akaknoyw:
-prompted: true
-ip: 127.0.0.1
-ips:
-- 127.0.0.1
-- 192.168.1.254
-```
+2. If not linked:
+   - The plugin verifies if the account is **premium**.
+   - Prompts the player to link their IP.
 
-> Adjust the configuration according to your needs and security policy.
+3. Once linked:
+   - Future logins from that IP are automatic.
 
 ---
 
-## Commands
+## 🔧 Commands
 
-* `/premiumbypass accept` — Registers the player's current IP address for future bypass.
-* `/premiumbypass remove` — Removes the player's IP registration.
-* `/premiumbypass status` — Displays the current status (registered IP, date, etc.).
-
-> These commands may require permissions defined in the plugin (e.g., `premiumbypass.accept`, `premiumbypass.remove`, `premiumbypass.status`).
-
----
-
-## Development & Compilation
-
-The project uses Gradle. If you want to compile locally:
-
-1. Place the AuthMe JAR in the `libs/` folder of the project (if necessary). 2. In `build.gradle`, uncomment the line `compileOnly files('libs/authme.jar')` if it exists.
-3. Compile:
-
-```bash
-./gradlew clean build
-```
-
-The compiled JAR will usually be located in `build/libs/`.
+| Command | Description |
+|--------|-------------|
+| `/premium accept` | Link your current IP to your account |
+| `/premium revoke` | Remove your current IP |
+| `/premium revoke all` | Remove all linked IPs |
+| `/premium list` | Show linked IPs (confirmation required) |
+| `/premium about` | Show plugin info |
 
 ---
 
-## Security & Privacy
+## 📁 Configuration Files
 
-* **IP Risk**: Using an IP address to authenticate a player is less secure than a password. IP addresses can be shared (NAT), change with connections, or be compromised.
-* **Opt-in**: The plugin requires the player to consent (`/premiumbypass accept`) — do not enable it by default without the player's consent.
-* **Personal Data**: IP addresses are considered personal data in several jurisdictions (e.g., EU). Make sure you comply with applicable legislation (GDPR): inform players, retain data for a limited time, allow deletion upon request, etc.
+### `config.yml`
+- Enable/disable plugin
+- Customize messages
+- Control join behavior
 
-Recommendations: Add an option for automatic IP expiration and a data export/deletion mechanism for user requests.
-
----
-
-## Contributing
-
-Contributions are welcome: bug reports, improvements, security suggestions. Please fork the repository, create a dedicated branch, and open a Pull Request.
+### `linked.yml`
+- Stores encrypted IPs per player
+- Automatically managed by the plugin
 
 ---
 
-## License
+## 🔒 Security
 
-This project is licensed under the **Apache-2.0** license. See the `LICENSE` file for the full text.
+- Uses **AES-128 encryption** for IP storage
+- Fallback to Base64 if encryption fails
+- No plain IPs stored in files
 
 ---
 
-*Last updated: October 31, 2025*
+## 🔄 Compatibility
+
+The plugin dynamically detects AuthMe API using:
+- `fr.xephi.authme.api.v3.AuthMeApi`
+- `fr.xephi.authme.api.API`
+- Legacy `AuthMe` API
+
+---
+
+## 🌍 External API
+
+- Uses Mojang endpoint: https://api.mojang.com/users/profiles/minecraft/{username}
+
+---
+
+to verify premium accounts.
+
+---
+
+## ⚠️ Notes
+
+- Requires AuthMe to force login players.
+- Without AuthMe, the plugin still runs but cannot auto-login users.
+- IP-based login assumes stable player IPs.
+
+---
+
+## 🧩 Example Use Case
+
+> A premium player joins your server regularly from the same location.
+
+✔ First login → manually authenticate  
+✔ Accept IP linking via `/premium accept`  
+✔ Next logins → instant automatic login 🚀
