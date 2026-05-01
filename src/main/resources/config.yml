@@ -1,8 +1,54 @@
 settings:
+  enableplugin: true
   prompt_on_join: true
 
 messages:
-  auto_login_success: "&aConnexion automatique détectée — compte premium authentifié !"
-  prompt_ip: "&eVoulez-vous activer le bypass de connexion pour cette IP ?"
-  premium_link_success: "&aVotre compte premium est désormais lié et connecté !"
-  premium_revoke: "&cLe bypass a été retiré pour ce compte."
+  # Erreurs générales
+  plugin_disabled: "&cLe système de connexion premium est actuellement désactivé."
+  not_authenticated: "&cVous devez être connecté (faites /login <mot_de_passe>) avant d'utiliser cette commande."
+  no_ip: "&cImpossible de récupérer votre adresse IP actuelle."
+  unknown_command: "&eCommande inconnue. Faites /premium pour voir la liste."
+  not_player: "&cCette commande est réservée aux joueurs."
+
+  # /premium (Aide)
+  help_header: "&6=== Commandes Premium ==="
+  help_accept: "&e/premium accept &f- Autoriser votre IP actuelle (bypass automatique)."
+  help_revoke: "&e/premium revoke [all|<ip>] &f- Retirer une ou toutes les IPs de votre compte."
+  help_list: "&e/premium list &f- Afficher les IPs autorisées (nécessite confirmation)."
+  help_about: "&e/premium about &f- Comment fonctionne le plugin et la conformité RGPD."
+
+  # /premium accept
+  mojang_check: "&eVérification de votre compte auprès de Mojang en cours..."
+  not_premium: "&cCe compte n'est pas un compte Premium officiel. Par sécurité, le bypass vous est refusé."
+  already_linked: "&aCette adresse IP est déjà autorisée pour le bypass."
+  premium_link_success: "&aSuccès ! Votre compte premium est désormais lié à cette adresse IP."
+
+  # /premium revoke
+  premium_revoke: "&cLe bypass a été retiré pour votre IP actuelle."
+  premium_revoke_all: "&cToutes les adresses IP autorisées ont été retirées."
+  premium_revoke_specific: "&cL'IP a été retirée de la liste."
+  ip_not_in_list: "&eCette adresse IP n'est pas dans vos IPs autorisées."
+
+  # /premium list
+  list_confirm: "&eÊtes-vous sûr de vouloir afficher vos IPs privées dans le tchat ?"
+  list_howto: "&eFaites &b/premium list sure&e pour continuer."
+  list_empty: "&eAucune adresse IP n'est liée à votre compte."
+  list_header: "&aVos adresses IP autorisées :"
+  list_format: "&b - %ip%"
+
+  # /premium about (RGPD)
+  about:
+    - "&6=== À propos & RGPD ==="
+    - "&eCe plugin permet de vous connecter automatiquement sans mot de passe si"
+    - "&evous jouez avec un compte Minecraft officiel (Premium)."
+    - "&a&nProtection de vos données :&r"
+    - "&f- Votre adresse IP n'est enregistrée qu'avec votre accord explicite."
+    - "&f- Les IPs sont &cchiffrées (AES)&f dans nos fichiers."
+    - "&f- Personne (pas même les administrateurs) ne peut les lire facilement en clair."
+    - "&f- Vous pouvez supprimer vos données à tout moment via &c/premium revoke all&f."
+
+  # Évènements de connexion
+  auto_login_success: "&aConnexion automatique réussie — compte premium et IP vérifiés !"
+  prompt_ip: "&eVoulez-vous activer la connexion sans mot de passe pour cette IP ?"
+  prompt_accept_howto: "&eFaites &b/premium accept&e pour l'autoriser."
+  prompt_revoke_howto: "&eFaites &b/premium revoke&e pour la retirer plus tard."
