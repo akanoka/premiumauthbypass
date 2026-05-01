@@ -98,11 +98,7 @@ The plugin dynamically detects AuthMe API using:
 
 ## 🌍 External API
 
-- Uses Mojang endpoint: https://api.mojang.com/users/profiles/minecraft/{username}
-
----
-
-to verify premium accounts.
+- Uses Mojang endpoint: https://api.mojang.com/users/profiles/minecraft/{username} to verify premium accounts.
 
 ---
 
