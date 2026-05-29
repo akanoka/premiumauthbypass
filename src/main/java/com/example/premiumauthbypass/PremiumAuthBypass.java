@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
@@ -70,7 +71,7 @@ public class PremiumAuthBypass extends JavaPlugin implements Listener {
             getCommand("premium").setTabCompleter(this);
         }
         
-        getLogger().info("PremiumAuthBypass enabled.");
+        getLogger().info("PremiumAuthBypass enabled. Velocity Security Failsafe is active.");
     }
 
     @Override
@@ -154,6 +155,24 @@ public class PremiumAuthBypass extends JavaPlugin implements Listener {
         return ChatColor.translateAlternateColorCodes('&', this.cfg.getString(path, def));
     }
 
+    // --- Sécurité Anti-Proxy (Velocity/BungeeCord mal configurés) ---
+    private boolean isIpSafe(InetAddress address) {
+        if (address == null) return false;
+        
+        // Interdit formellement les adresses de loopback (127.0.0.1, localhost)
+        if (address.isLoopbackAddress() || address.isAnyLocalAddress()) {
+            return false;
+        }
+        
+        // Interdit les IP réseau local (192.168.x.x, 10.x.x.x, 172.x.x.x) souvent utilisées par les nœuds Pterodactyl/Docker
+        if (address.isSiteLocalAddress() && !this.cfg.getBoolean("settings.allow_local_ips", false)) {
+            return false;
+        }
+        
+        return true;
+    }
+    // ----------------------------------------------------------------
+
     // --- Système de Chiffrement AES ---
     private String encryptIp(String ip) {
         try {
@@ -164,7 +183,7 @@ public class PremiumAuthBypass extends JavaPlugin implements Listener {
             return Base64.getEncoder().encodeToString(encVal);
         } catch (Exception e) {
             getLogger().warning("Error encrypting IP: " + e.getMessage());
-            return Base64.getEncoder().encodeToString(ip.getBytes(StandardCharsets.UTF_8)); // Fallback Base64 simple
+            return Base64.getEncoder().encodeToString(ip.getBytes(StandardCharsets.UTF_8)); 
         }
     }
 
@@ -178,9 +197,9 @@ public class PremiumAuthBypass extends JavaPlugin implements Listener {
             return new String(decValue, StandardCharsets.UTF_8);
         } catch (Exception e) {
             try {
-                return new String(Base64.getDecoder().decode(encryptedIp), StandardCharsets.UTF_8); // Fallback Base64
+                return new String(Base64.getDecoder().decode(encryptedIp), StandardCharsets.UTF_8);
             } catch (Exception ex) {
-                return encryptedIp; // Retourne tel quel si illisible
+                return encryptedIp;
             }
         }
     }
@@ -205,12 +224,18 @@ public class PremiumAuthBypass extends JavaPlugin implements Listener {
         Player player = event.getPlayer();
         String name = player.getName();
         String lower = name.toLowerCase();
-        String currentIp = (player.getAddress() != null) ? player.getAddress().getAddress().getHostAddress() : null;
         
+        InetAddress pAddress = (player.getAddress() != null) ? player.getAddress().getAddress() : null;
+        String currentIp = (pAddress != null) ? pAddress.getHostAddress() : null;
+        
+        // Failsafe de sécurité: on arrête tout si c'est une IP de proxy
+        if (pAddress == null || !isIpSafe(pAddress)) {
+            return; 
+        }
+
         List<String> encryptedIps = this.linkedConfig.getStringList(lower + ".ips");
         boolean isIpAuthorized = false;
 
-        // Déchiffrement à la volée pour vérifier
         if (currentIp != null && encryptedIps != null) {
             for (String encIp : encryptedIps) {
                 if (currentIp.equals(decryptIp(encIp))) {
@@ -265,7 +290,9 @@ public class PremiumAuthBypass extends JavaPlugin implements Listener {
         }
 
         String lower = p.getName().toLowerCase();
-        String currentIp = (p.getAddress() != null) ? p.getAddress().getAddress().getHostAddress() : null;
+        
+        InetAddress pAddress = (p.getAddress() != null) ? p.getAddress().getAddress() : null;
+        String currentIp = (pAddress != null) ? pAddress.getHostAddress() : null;
 
         if (args.length == 0) {
             p.sendMessage(getMessage("messages.help_header", "&6=== Commandes Premium ==="));
@@ -279,7 +306,7 @@ public class PremiumAuthBypass extends JavaPlugin implements Listener {
         String sub = args[0].toLowerCase(Locale.ROOT);
         switch (sub) {
             case "accept":
-                return handleAccept(p, lower, currentIp);
+                return handleAccept(p, lower, pAddress, currentIp);
             case "revoke":
                 return handleRevoke(p, lower, currentIp, args);
             case "list":
@@ -315,14 +342,22 @@ public class PremiumAuthBypass extends JavaPlugin implements Listener {
         return completions;
     }
 
-    private boolean handleAccept(Player p, String lower, String currentIp) {
+    private boolean handleAccept(Player p, String lower, InetAddress pAddress, String currentIp) {
         if (!isAuthenticated(p)) {
-            p.sendMessage(getMessage("messages.not_authenticated", "&cVous devez être connecté."));
+            p.sendMessage(getMessage("messages.not_authenticated", "&cVous devez être connecté pour faire cela."));
             return true;
         }
 
-        if (currentIp == null) {
+        if (pAddress == null || currentIp == null) {
             p.sendMessage(getMessage("messages.no_ip", "&cImpossible de récupérer votre adresse IP."));
+            return true;
+        }
+        
+        // Bloque l'enregistrement de l'IP de Velocity au lieu de celle du joueur
+        if (!isIpSafe(pAddress)) {
+            p.sendMessage(ChatColor.translateAlternateColorCodes('&', "&4&lErreur de sécurité &c: Le serveur n'est pas configuré correctement avec Velocity."));
+            p.sendMessage(ChatColor.translateAlternateColorCodes('&', "&cPar sécurité, le bypass est désactivé. Informez l'administrateur de configurer le forwarding d'IP."));
+            getLogger().warning("[Sécurité] Tentative de bypass empêchée pour " + p.getName() + " car l'IP détectée est une IP locale/proxy (" + currentIp + ").");
             return true;
         }
 
@@ -403,7 +438,6 @@ public class PremiumAuthBypass extends JavaPlugin implements Listener {
             return true;
         }
         
-        // Retrait d'une IP spécifique (L'utilisateur la donne en clair)
         String ipToRemove = args[1];
         boolean removed = false;
         for (int i = 0; i < encryptedIps.size(); i++) {
@@ -427,7 +461,7 @@ public class PremiumAuthBypass extends JavaPlugin implements Listener {
 
     private boolean handleList(Player p, String lower, String[] args) {
         if (args.length == 1) {
-            p.sendMessage(getMessage("messages.list_confirm", "&eÊtes-vous sûr ?"));
+            p.sendMessage(getMessage("messages.list_confirm", "&eÊtes-vous sûr de vouloir lister vos IPs ?"));
             p.sendMessage(getMessage("messages.list_howto", "&eFaites /premium list sure"));
             return true;
         }
@@ -435,7 +469,7 @@ public class PremiumAuthBypass extends JavaPlugin implements Listener {
         if (args.length == 2 && args[1].equalsIgnoreCase("sure")) {
             List<String> encryptedIps = this.linkedConfig.getStringList(lower + ".ips");
             if (encryptedIps == null || encryptedIps.isEmpty()) {
-                p.sendMessage(getMessage("messages.list_empty", "&eAucune IP."));
+                p.sendMessage(getMessage("messages.list_empty", "&eAucune IP autorisée."));
             } else {
                 p.sendMessage(getMessage("messages.list_header", "&aIPs liées :"));
                 for (String encIp : encryptedIps) {
@@ -471,7 +505,7 @@ public class PremiumAuthBypass extends JavaPlugin implements Listener {
             con.setConnectTimeout(3000);
             con.setReadTimeout(3000);
             con.setRequestMethod("GET");
-            con.setRequestProperty("User-Agent", "PremiumAuthBypass/1.3");
+            con.setRequestProperty("User-Agent", "PremiumAuthBypass/1.4");
             int code = con.getResponseCode();
             if (code == 200) {
                 try (BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream(), StandardCharsets.UTF_8))) {
